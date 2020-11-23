@@ -9,6 +9,7 @@ public protocol WebSocketClientDelegate: class {
     func didReceive(event: WebSocketEvent)
     func didReceive(error: Error)
     func didChangeConnection(state: WebSocketClient.State)
+    func getAuthInfo(completion: @escaping (String?, [String: String]?) -> ())
 }
 
 private let kAttemptReconnectCount = 3
@@ -135,8 +136,17 @@ open class WebSocketClient {
         }
         
         self.queuedSubscriptions[subscriber] = connectionCompletionBlock
-        self.webSocket.connect()
+        connectWebsocket()
         return subscriber
+    }
+    
+    func connectWebsocket() {
+        delegate?.getAuthInfo(completion: { [weak self] (token: String?, headers: [String: String]?) in
+            if let token = token {
+                self?.authenticate(token: token, headers: headers)
+            }
+            self?.webSocket.connect()
+        })
     }
     
     func connectionCompletionBlock(subscriber: Subscriber, responseHandler: SubscriptionResponseHandler) -> WebSocketConnected {
@@ -265,7 +275,7 @@ open class WebSocketClient {
         // Requeue all so they don't get error callbacks on disconnect and they get re-subscribed on connect.
         self.requeueAllSubscribers()
         self.disconnectAndPossiblyReconnect()
-        self.webSocket.connect()
+        connectWebsocket()
     }
 }
 
